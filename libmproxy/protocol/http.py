@@ -37,9 +37,12 @@ class _HttpTransmissionLayer(Layer):
 
     def read_response(self, request):
         response = self.read_response_headers()
-        response.data.content = b"".join(
-            self.read_response_body(request, response)
-        )
+        if response.expect_content(request):
+            response.content = b"".join(
+                self.read_response_body(request, response)
+            )
+        else:
+            response.content = None
         return response
 
     def read_response_headers(self):
@@ -270,13 +273,14 @@ class HttpLayer(Layer):
             # streaming:
             # First send the headers and then transfer the response incrementally
             self.send_response_headers(flow.response)
-            chunks = self.read_response_body(
-                flow.request,
-                flow.response
-            )
-            if callable(flow.response.stream):
-                chunks = flow.response.stream(chunks)
-            self.send_response_body(flow.response, chunks)
+            if flow.response.expect_content(flow.request):
+                chunks = self.read_response_body(
+                    flow.request,
+                    flow.response
+                )
+                if callable(flow.response.stream):
+                    chunks = flow.response.stream(chunks)
+                self.send_response_body(flow.response, chunks)
             flow.response.timestamp_end = utils.timestamp()
 
     def get_response_from_server(self, flow):
@@ -312,7 +316,9 @@ class HttpLayer(Layer):
         if flow == Kill:
             raise Kill()
 
-        if flow.response.stream:
+        if not flow.response.expect_content(flow.request):
+            flow.response.data.content = None
+        elif flow.response.stream:
             flow.response.data.content = CONTENT_MISSING
         else:
             flow.response.data.content = b"".join(self.read_response_body(

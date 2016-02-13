@@ -279,6 +279,8 @@ class DumpMaster(flow.FlowMaster):
 
         if flow.response.content == CONTENT_MISSING:
             size = "(content missing)"
+        elif flow.response.content == None:
+            size = "(no content)"
         else:
             size = netlib.utils.pretty_size(len(flow.response.content))
         size = click.style(size, bold=True)
